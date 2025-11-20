@@ -7,11 +7,11 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
-    <!-- Google Generative AI SDK -->
+    <!-- Google Generative AI SDK (Pinned to latest to ensure Flash support) -->
     <script type="importmap">
       {
         "imports": {
-          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+          "@google/generative-ai": "https://esm.run/@google/generative-ai@latest"
         }
       }
     </script>
@@ -228,13 +228,17 @@
             
             try {
                 genAI = new GoogleGenerativeAI(key);
-                model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                
+                // FIX APPLIED HERE: Using "gemini-1.5-flash-latest" which is safer for API resolution
+                model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+                
                 document.getElementById('api-modal').style.display = 'none';
                 initChart();
+                
                 // Run initial demo
                 runAnalysis('reversion');
             } catch(e) {
-                alert("Invalid Key");
+                alert("Error: " + e.message);
             }
         }
 
@@ -330,7 +334,7 @@
             const start = Date.now();
             try {
                 const result = await model.generateContent(prompt);
-                const response = result.response.text();
+                const response = await result.response.text();
                 const latency = Date.now() - start;
                 
                 document.getElementById('latency').innerText = latency;
@@ -344,7 +348,11 @@
                     ${marked(response)}
                 `;
             } catch (e) {
-                aiBox.innerHTML = `<div class="text-quant-red">Analysis Failed: ${e.message}</div>`;
+                console.error(e);
+                aiBox.innerHTML = `<div class="text-quant-red border border-quant-red/30 p-3 rounded">
+                    <strong>Analysis Failed:</strong> ${e.message}<br><br>
+                    <span class="text-xs">Tip: Ensure your API key is valid and the model 'gemini-1.5-flash-latest' is supported in your region.</span>
+                </div>`;
             }
         }
 
@@ -375,7 +383,7 @@
 
             try {
                 const result = await model.generateContent(prompt);
-                const response = result.response.text();
+                const response = await result.response.text();
                 
                 aiBox.innerHTML += `
                     <div class="mt-2 flex gap-3">
@@ -386,12 +394,14 @@
                 aiBox.scrollTop = aiBox.scrollHeight;
             } catch (e) {
                 console.error(e);
+                aiBox.innerHTML += `<div class="text-quant-red text-xs mt-2">Error connecting to agent.</div>`;
             }
             loader.style.width = "0%";
         }
 
         // Simple Markdown Parser for Demo
         function marked(text) {
+            if(!text) return "";
             return text
                 .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
                 .replace(/\n/g, '<br>');
