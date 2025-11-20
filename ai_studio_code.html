@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QuantAI | Gemini Market Agent</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Google Generative AI SDK -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'quant-bg': '#0F172A',       /* Dark Navy Background */
+                        'quant-card': '#1E293B',     /* Card Background */
+                        'quant-border': '#334155',
+                        'quant-text': '#F8FAFC',
+                        'quant-sub': '#94A3B8',
+                        'quant-accent': '#38BDF8',   /* Electric Blue */
+                        'quant-green': '#34D399', 
+                        'quant-red': '#F87171',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { background-color: #0F172A; color: #F8FAFC; }
+        .chart-container { position: relative; height: 350px; width: 100%; }
+        
+        /* Scrollbar Styling */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #1E293B; }
+        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #64748B; }
+
+        /* Markdown Styles */
+        .prose strong { color: #38BDF8; font-weight: 600; }
+        .prose ul { margin-left: 1rem; list-style-type: disc; color: #94A3B8; }
+        .prose li { margin-bottom: 0.25rem; }
+
+        /* Pulse Animation */
+        .scan-line {
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, transparent, #38BDF8, transparent);
+            animation: scan 2s linear infinite;
+        }
+        @keyframes scan {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+    </style>
+</head>
+<body class="font-sans antialiased selection:bg-quant-accent selection:text-white">
+
+    <!-- API Key Modal -->
+    <div id="api-modal" class="fixed inset-0 bg-black/90 z-50 flex items-center justify-center backdrop-blur-md">
+        <div class="bg-quant-card border border-quant-border p-8 rounded-2xl shadow-2xl max-w-md w-full mx-4">
+            <div class="text-center mb-6">
+                <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-quant-accent/10 text-quant-accent mb-4">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11.536 21H7v-4H3v-5l3-5.292A9.044 9.044 0 0111.422 5c1.747 0 3.332.474 4.725 1.275M9 17H5m12 0a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+                <h2 class="text-2xl font-bold text-white">QuantAI Analyst</h2>
+                <p class="text-quant-sub text-sm mt-2">Enter your Google Gemini API Key to activate the agent.</p>
+            </div>
+            
+            <input type="password" id="api-key-input" placeholder="sk-..." class="w-full bg-slate-900 border border-quant-border text-white p-3 rounded-lg mb-4 focus:ring-2 focus:ring-quant-accent outline-none font-mono text-sm transition-all">
+            
+            <button onclick="saveApiKey()" class="w-full bg-quant-accent hover:bg-sky-400 text-slate-900 py-3 rounded-lg font-bold transition-all transform active:scale-95">
+                Initialize Agent
+            </button>
+            
+            <p class="text-xs text-center text-slate-500 mt-6">
+                Keys are stored locally in browser memory only.<br>
+                <a href="https://aistudio.google.com/app/apikey" target="_blank" class="underline hover:text-quant-accent">Get a Free Gemini Key Here</a>
+            </p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="border-b border-quant-border bg-quant-bg/80 backdrop-blur sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 bg-gradient-to-br from-quant-accent to-blue-600 rounded-lg flex items-center justify-center text-white font-bold shadow-lg shadow-quant-accent/20">Q</div>
+                <span class="font-bold text-lg tracking-wide">Quant<span class="text-quant-accent">AI</span> <span class="text-quant-sub font-normal text-xs ml-2 border-l border-quant-border pl-2">System v1.0</span></span>
+            </div>
+            <div class="flex items-center gap-3">
+                <a href="https://linkedin.com" target="_blank" class="text-xs font-medium text-quant-sub hover:text-white transition-colors">Join Community</a>
+                <span class="text-[10px] font-mono text-quant-green bg-quant-green/10 px-2 py-1 rounded border border-quant-green/20 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-quant-green animate-pulse"></span> SYSTEM READY
+                </span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: Market Data -->
+        <div class="lg:col-span-8 space-y-6">
+            
+            <!-- Header -->
+            <div class="bg-quant-card border border-quant-border rounded-xl p-6">
+                <h1 class="text-2xl font-bold mb-2">Market Simulation Sandbox</h1>
+                <p class="text-quant-sub text-sm">Feed raw price action into the Gemini 1.5 Flash model to identify setups using Auction Market Theory.</p>
+                
+                <!-- Scenario Buttons -->
+                <div class="grid grid-cols-3 gap-3 mt-6">
+                    <button onclick="runAnalysis('reversion')" id="btn-reversion" class="strat-btn p-3 rounded-lg border border-quant-border bg-slate-900/50 hover:border-quant-accent/50 transition-all text-left group">
+                        <div class="text-xs text-quant-sub uppercase tracking-wider mb-1">Scenario A</div>
+                        <div class="font-semibold text-sm group-hover:text-quant-accent">Mean Reversion</div>
+                    </button>
+                    <button onclick="runAnalysis('breakout')" id="btn-breakout" class="strat-btn p-3 rounded-lg border border-quant-border bg-slate-900/50 hover:border-quant-accent/50 transition-all text-left group">
+                        <div class="text-xs text-quant-sub uppercase tracking-wider mb-1">Scenario B</div>
+                        <div class="font-semibold text-sm group-hover:text-quant-accent">Volume Breakout</div>
+                    </button>
+                    <button onclick="runAnalysis('lvn')" id="btn-lvn" class="strat-btn p-3 rounded-lg border border-quant-border bg-slate-900/50 hover:border-quant-accent/50 transition-all text-left group">
+                        <div class="text-xs text-quant-sub uppercase tracking-wider mb-1">Scenario C</div>
+                        <div class="font-semibold text-sm group-hover:text-quant-accent">LVN Traversal</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Chart Area -->
+            <div class="bg-quant-card border border-quant-border rounded-xl p-4 relative overflow-hidden">
+                <div class="chart-container">
+                    <canvas id="strategyChart"></canvas>
+                </div>
+                <!-- Data Packet Visualizer -->
+                <div class="mt-4 p-3 bg-slate-900 rounded border border-quant-border font-mono text-[10px] text-quant-sub overflow-x-hidden whitespace-nowrap">
+                    <span class="text-quant-accent">>> OUTGOING_PAYLOAD: </span>
+                    <span id="raw-data-display" class="opacity-70">WAITING FOR INPUT...</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: AI Agent -->
+        <div class="lg:col-span-4 flex flex-col h-[calc(100vh-8rem)] sticky top-24">
+            <div class="flex-1 bg-quant-card border border-quant-border rounded-xl flex flex-col shadow-2xl overflow-hidden">
+                
+                <!-- Agent Header -->
+                <div class="p-4 border-b border-quant-border bg-slate-900/50 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <div class="w-2 h-2 rounded-full bg-quant-accent"></div>
+                        <span class="font-bold text-sm text-white">Gemini Agent</span>
+                    </div>
+                    <div class="text-[10px] text-quant-sub">Latency: <span id="latency">--</span>ms</div>
+                </div>
+
+                <!-- Agent Output (Chat) -->
+                <div id="ai-content" class="flex-1 overflow-y-auto p-4 space-y-4 font-mono text-sm prose prose-invert max-w-none">
+                    <div class="flex flex-col items-center justify-center h-full text-quant-sub opacity-50 gap-3">
+                        <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.384-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                        <p>Select a scenario to begin analysis</p>
+                    </div>
+                </div>
+
+                <!-- Input Area -->
+                <div class="p-4 border-t border-quant-border bg-slate-900 relative">
+                    <div id="loading-bar" class="absolute top-0 left-0 h-[1px] bg-quant-accent w-0 transition-all duration-300"></div>
+                    <input type="text" id="chat-input" placeholder="Ask follow up question..." 
+                           class="w-full bg-quant-card border border-quant-border text-white px-4 py-3 rounded-lg focus:border-quant-accent focus:ring-1 focus:ring-quant-accent outline-none text-sm"
+                           onkeypress="if(event.key === 'Enter') askFollowUp()">
+                    <div class="absolute right-6 top-7 text-[10px] text-quant-sub">Press Enter ↵</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Disclaimer Footer -->
+    <footer class="max-w-7xl mx-auto px-4 pb-8 text-center">
+        <p class="text-[10px] text-quant-sub/50">
+            Disclaimer: This interface uses simulated market data for educational demonstration of Generative AI capabilities. 
+            Not financial advice. Powered by Google Gemini.
+        </p>
+    </footer>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        let genAI, model, chartInstance;
+        let currentContext = {};
+
+        // --- Data Config ---
+        const scenarios = {
+            reversion: {
+                label: "Mean Reversion at VAH",
+                price: [4120.50, 4122.00, 4124.25, 4126.00, 4128.50, 4128.75, 4128.00, 4126.50, 4125.00, 4123.75],
+                vol: [1200, 1500, 2200, 1800, 900, 600, 800, 2500, 2800, 3000],
+                delta: [200, 300, 500, 100, -50, -100, -300, -800, -1200, -1500],
+                desc: "Price probed above Value Area High (VAH) on decreasing volume. Aggressive selling (negative delta) entering on the rotation back inside."
+            },
+            breakout: {
+                label: "Impulsive Breakout",
+                price: [4100, 4101, 4101.5, 4102, 4104, 4108, 4112, 4115, 4118, 4122],
+                vol: [500, 450, 600, 1200, 3500, 4200, 3800, 4000, 3200, 2800],
+                delta: [50, 20, 100, 800, 2500, 3000, 2800, 2200, 1800, 1500],
+                desc: "Consolidation at Point of Control (POC) followed by strong expansion. Volume confirms price. Delta is strictly positive and increasing."
+            },
+            lvn: {
+                label: "Low Volume Node Zip",
+                price: [4150, 4152, 4153, 4158, 4165, 4172, 4174, 4175, 4175.5, 4176],
+                vol: [2000, 1800, 400, 200, 150, 300, 2500, 2800, 2200, 2000],
+                delta: [100, 150, 50, 20, 40, 80, 800, 900, 600, 500],
+                desc: "Price entered a Low Volume Node (LVN) zone. Note the volume drop during the rapid price expansion (vacuum effect) before acceptance higher."
+            }
+        };
+
+        // --- Initialization ---
+        window.saveApiKey = function() {
+            const key = document.getElementById('api-key-input').value.trim();
+            if(!key) return alert("API Key required");
+            
+            try {
+                genAI = new GoogleGenerativeAI(key);
+                model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                document.getElementById('api-modal').style.display = 'none';
+                initChart();
+                // Run initial demo
+                runAnalysis('reversion');
+            } catch(e) {
+                alert("Invalid Key");
+            }
+        }
+
+        // --- Charting ---
+        function initChart() {
+            const ctx = document.getElementById('strategyChart').getContext('2d');
+            
+            // Create Gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+            gradient.addColorStop(0, 'rgba(56, 189, 248, 0.5)');
+            gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array.from({length: 10}, (_, i) => i + 1),
+                    datasets: [{
+                        label: 'Price',
+                        data: [],
+                        borderColor: '#38BDF8',
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4,
+                        yAxisID: 'y'
+                    }, {
+                        label: 'Volume',
+                        data: [],
+                        type: 'bar',
+                        backgroundColor: '#94A3B8',
+                        opacity: 0.5,
+                        yAxisID: 'y1'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { grid: { display: false, color: '#334155' }, ticks: { color: '#64748B' } },
+                        y: { position: 'right', grid: { color: '#1E293B' }, ticks: { color: '#94A3B8' } },
+                        y1: { display: false, min: 0 }
+                    }
+                }
+            });
+        }
+
+        // --- Agent Logic ---
+        window.runAnalysis = async function(key) {
+            if(!model) return;
+            const data = scenarios[key];
+            currentContext = data;
+
+            // UI Updates
+            document.querySelectorAll('.strat-btn').forEach(b => b.classList.remove('border-quant-accent', 'bg-slate-800'));
+            document.getElementById(`btn-${key}`).classList.add('border-quant-accent', 'bg-slate-800');
+            
+            document.getElementById('raw-data-display').innerText = JSON.stringify(data.price.slice(0,5)) + "...";
+            
+            // Update Chart
+            chartInstance.data.datasets[0].data = data.price;
+            chartInstance.data.datasets[1].data = data.vol;
+            chartInstance.update();
+
+            // UI Loading
+            const aiBox = document.getElementById('ai-content');
+            aiBox.innerHTML = `
+                <div class="flex flex-col gap-2">
+                    <div class="text-xs font-mono text-quant-accent blink">>> INITIALIZING ANALYSIS PROTOCOL...</div>
+                    <div class="scan-line"></div>
+                </div>
+            `;
+
+            const prompt = `
+                Role: Senior Quantitative Trader & Market Profile Expert.
+                Task: Analyze this market snippet.
+                Setup: ${data.label}
+                Context: ${data.desc}
+                Data:
+                - Price: ${JSON.stringify(data.price)}
+                - Volume: ${JSON.stringify(data.vol)}
+                - Delta: ${JSON.stringify(data.delta)}
+
+                Output Format (Markdown):
+                1. **Structure**: Identify the market state (Imbalance/Balance).
+                2. **Order Flow**: Analyze the relationship between Price, Volume, and Delta.
+                3. **Trade Idea**: Actionable signal (Long/Short) with invalidation level.
+                
+                Tone: Institutional, concise, data-driven. No fluff.
+            `;
+
+            const start = Date.now();
+            try {
+                const result = await model.generateContent(prompt);
+                const response = result.response.text();
+                const latency = Date.now() - start;
+                
+                document.getElementById('latency').innerText = latency;
+                
+                // Format output
+                aiBox.innerHTML = `
+                    <div class="bg-slate-800/50 p-3 rounded border border-quant-accent/20 mb-4">
+                        <div class="text-xs text-quant-sub mb-1">DETECTED SETUP</div>
+                        <div class="font-bold text-white">${data.label}</div>
+                    </div>
+                    ${marked(response)}
+                `;
+            } catch (e) {
+                aiBox.innerHTML = `<div class="text-quant-red">Analysis Failed: ${e.message}</div>`;
+            }
+        }
+
+        window.askFollowUp = async function() {
+            const input = document.getElementById('chat-input');
+            const question = input.value;
+            if(!question || !model) return;
+
+            const aiBox = document.getElementById('ai-content');
+            const loader = document.getElementById('loading-bar');
+            
+            // User Msg
+            aiBox.innerHTML += `
+                <div class="mt-4 text-right">
+                    <span class="bg-quant-accent/10 text-quant-accent px-3 py-2 rounded-lg text-xs inline-block border border-quant-accent/20">${question}</span>
+                </div>
+            `;
+            input.value = '';
+            aiBox.scrollTop = aiBox.scrollHeight;
+            
+            loader.style.width = "100%"; // Animate loader
+
+            const prompt = `
+                Current Context: ${JSON.stringify(currentContext)}
+                User Question: "${question}"
+                Answer specifically based on the data provided. Keep it under 2 sentences.
+            `;
+
+            try {
+                const result = await model.generateContent(prompt);
+                const response = result.response.text();
+                
+                aiBox.innerHTML += `
+                    <div class="mt-2 flex gap-3">
+                        <div class="min-w-[8px] w-2 h-2 rounded-full bg-quant-green mt-2"></div>
+                        <div class="text-gray-300 text-sm">${marked(response)}</div>
+                    </div>
+                `;
+                aiBox.scrollTop = aiBox.scrollHeight;
+            } catch (e) {
+                console.error(e);
+            }
+            loader.style.width = "0%";
+        }
+
+        // Simple Markdown Parser for Demo
+        function marked(text) {
+            return text
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\n/g, '<br>');
+        }
+    </script>
+</body>
+</html>
